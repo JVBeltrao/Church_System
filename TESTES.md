@@ -1,13 +1,13 @@
 # Testes automatizados
 
-O sistema tem **186 testes automatizados** em três níveis. Eles rodam sozinhos a cada push e a cada pull request no GitHub Actions (`.github/workflows/ci.yml`).
+O sistema tem **245 testes automatizados** em três níveis. Eles rodam sozinhos a cada push e a cada pull request no GitHub Actions (`.github/workflows/ci.yml`).
 
 | Nível | Ferramentas | Onde fica | O que verifica | Testes |
 |---|---|---|---|---|
-| Unidade (backend) | Vitest | `backend/tests/unit` | Regras de negócio puras: recorrência de eventos, cálculo de aniversário, situação da manutenção, validações de entrada | 42 |
-| API (backend) | Vitest + Supertest, banco em memória | `backend/tests/api` | O servidor Express de verdade (rotas, autenticação JWT, validação, limites de tentativas, cabeçalhos de segurança, regras da campanha e da Mão Amiga, recuperação de senha), sem precisar de PostgreSQL | 76 |
-| Integração (backend) | Vitest + Supertest + **PostgreSQL real** | `backend/tests/integracao` | Os fluxos completos gravando e lendo do banco: membros e cargos, eventos recorrentes, manutenção, campanha (inclusive aprovações simultâneas), Mão Amiga, dashboard e "esqueci minha senha" | 21 |
-| Frontend | Vitest + React Testing Library + jsdom | `frontend/src/**/*.test.ts(x)` | Funções de data/ordenação/calendário, componentes (calendário, alternador de visão, ordenação) e páginas (Login, Eventos, Aniversários) do jeito que o usuário usa: clicando e digitando | 47 |
+| Unidade (backend) | Vitest | `backend/tests/unit` | Regras de negócio puras: recorrência de eventos, cálculo de aniversário, situação de cada tipo de manutenção, validações de entrada | 51 |
+| API (backend) | Vitest + Supertest, banco em memória | `backend/tests/api` | O servidor Express de verdade (rotas, autenticação JWT, validação, limites de tentativas, cabeçalhos de segurança, regras da campanha e da Mão Amiga, cadastro de membros, manutenção por tipo, recuperação de senha), sem precisar de PostgreSQL | 90 |
+| Integração (backend) | Vitest + Supertest + **PostgreSQL real** | `backend/tests/integracao` | Os fluxos completos gravando e lendo do banco: membros e cargos, eventos recorrentes, manutenção com vários tipos por ativo, campanha (inclusive aprovações simultâneas), Mão Amiga, dashboard e "esqueci minha senha" | 29 |
+| Frontend | Vitest + React Testing Library + jsdom | `frontend/src/**/*.test.ts(x)` | Funções de data/ordenação/calendário, componentes (calendário, alternador de visão, ordenação) e páginas (Login, Membros, Eventos, Aniversários, Manutenção, Dashboard) do jeito que o usuário usa: clicando e digitando | 75 |
 
 ## Como rodar
 
@@ -58,3 +58,4 @@ No frontend, as páginas com mais regras (Eventos, Aniversários, Login) e os co
 - Segurança: rotas do painel exigem login; tokens adulterados (`alg: none`, outro algoritmo, vencidos) são recusados; links `javascript:` e `data:` são bloqueados; há limite de tentativas no login e nos envios públicos.
 - Datas: aniversários e manutenções não "voltam um dia" por causa do fuso de Brasília.
 - Eventos: a aba "Esta semana" vai de domingo a sábado; "Passados" vem do mais recente para o mais antigo.
+- **Achados da avaliação com a igreja** (testes de regressão): o cadastro de membro com os cargos Auxiliar e Secretária funciona; o telefone é obrigatório; a planilha exportada traz só os membros selecionados; a limpeza do ar-condicionado não "zera" o prazo da recarga de gás; o dashboard mostra em vermelho as manutenções vencidas.

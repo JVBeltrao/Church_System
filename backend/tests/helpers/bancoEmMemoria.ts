@@ -5,12 +5,12 @@
  * autenticação) SEM precisar de PostgreSQL. O comportamento real do banco (SQL, chaves,
  * cascatas) é coberto pelos testes de integração em `tests/integracao`.
  */
+import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 
 type Linha = Record<string, any>
 
 export function criarBancoEmMemoria() {
-  let seq = 0
   const tabelas: Record<string, Linha[]> = {}
 
   const casa = (r: Linha, w: Linha = {}): boolean =>
@@ -19,6 +19,7 @@ export function criarBancoEmMemoria() {
       if (k === 'AND') return (v as Linha[]).every((x) => casa(r, x))
       if (v && typeof v === 'object' && !(v instanceof Date)) {
         if ('in' in v) return v.in.includes(r[k])
+        if ('notIn' in v) return !v.notIn.includes(r[k])
         if ('contains' in v) return String(r[k] ?? '').toLowerCase().includes(String(v.contains).toLowerCase())
         if ('not' in v) return r[k] !== v.not
         if ('gte' in v || 'lte' in v || 'lt' in v || 'gt' in v)
@@ -47,14 +48,51 @@ export function criarBancoEmMemoria() {
     })
   }
 
-  // Relação usada pelos eventos recorrentes: evento → eventoPai
-  const incluir = (nome: string, r: Linha, include?: Linha) => {
-    if (!include) return r
-    if (nome === 'evento' && include.eventoPai) {
-      return { ...r, eventoPai: r.eventoPaiId ? (tabelas.evento ?? []).find((x) => x.id === r.eventoPaiId) ?? null : null }
-    }
-    return r
+  /**
+   * Relações conhecidas: [modelo de destino, chave estrangeira, 'muitos' | 'um'].
+   * 'muitos': destino[fk] === registro.id  ·  'um': registro[fk] === destino.id
+   */
+  const RELACOES: Record<string, Record<string, [string, string, 'muitos' | 'um']>> = {
+    evento: { eventoPai: ['evento', 'eventoPaiId', 'um'] },
+    ativo: { tipos: ['tipoManutencao', 'ativoId', 'muitos'], manutencoes: ['manutencao', 'ativoId', 'muitos'] },
+    tipoManutencao: { manutencoes: ['manutencao', 'tipoId', 'muitos'], ativo: ['ativo', 'ativoId', 'um'] },
+    manutencao: { tipo: ['tipoManutencao', 'tipoId', 'um'], ativo: ['ativo', 'ativoId', 'um'] },
+    membro: { cargos: ['membroCargo', 'membroId', 'muitos'], categorias: ['membroCategoria', 'membroId', 'muitos'], conjuntos: ['membroConjunto', 'membroId', 'muitos'] },
+    membroCargo: { cargo: ['cargo', 'cargoId', 'um'] },
+    membroCategoria: { categoria: ['categoria', 'categoriaId', 'um'] },
+    membroConjunto: { conjunto: ['conjuntoMusical', 'conjuntoId', 'um'] },
   }
+  /** Apagar em cascata, como no banco: modelo → [filho, chave estrangeira] */
+  const CASCATA: Record<string, [string, string][]> = {
+    evento: [['evento', 'eventoPaiId']],
+    ativo: [['tipoManutencao', 'ativoId'], ['manutencao', 'ativoId']],
+    tipoManutencao: [['manutencao', 'tipoId'], ['notificacaoManutencao', 'tipoId']],
+    membro: [['membroCargo', 'membroId'], ['membroCategoria', 'membroId'], ['membroConjunto', 'membroId']],
+  }
+
+  /** Aplica include/select (inclusive aninhados) a um registro */
+  const moldar = (nome: string, r: Linha, opcoes: { include?: Linha; select?: Linha } = {}): Linha => {
+    const { include, select } = opcoes
+    if (!include && !select) return r
+    const saida: Linha = select ? {} : { ...r }
+    for (const [campo, valor] of Object.entries(select ?? include ?? {})) {
+      if (!valor) continue
+      const rel = RELACOES[nome]?.[campo]
+      if (!rel) { if (select) saida[campo] = r[campo]; continue }
+      const [destino, fk, tipo] = rel
+      const sub: Linha = valor === true ? {} : valor
+      const tabela = tabelas[destino] ?? []
+      if (tipo === 'um') {
+        const alvo = tabela.find((x) => x.id === r[fk])
+        saida[campo] = alvo ? moldar(destino, alvo, sub) : null
+      } else {
+        const filhos = ordenar(tabela.filter((x) => x[fk] === r.id && casa(x, sub.where)), sub.orderBy).slice(0, sub.take ?? Infinity)
+        saida[campo] = filhos.map((x) => moldar(destino, x, sub))
+      }
+    }
+    return saida
+  }
+  const incluir = (nome: string, r: Linha, include?: Linha, select?: Linha) => moldar(nome, r, { include, select })
 
   const padroes = (nome: string): Linha => ({
     ...(nome === 'contribuicao' || nome === 'doacaoAlimento' ? { status: 'PENDENTE' } : {}),
@@ -64,26 +102,36 @@ export function criarBancoEmMemoria() {
 
   const modelo = (nome: string) => {
     const t = (tabelas[nome] ??= [])
-    const novo = (data: Linha) => {
-      const r: Linha = { id: `${nome}-${++seq}`, criadoEm: new Date(), ...padroes(nome), ...data }
+    const novo = (data: Linha): Linha => {
+      // create aninhado: { tipos: { create: [...] } }
+      const aninhados = Object.entries(data).filter(([k, v]) => RELACOES[nome]?.[k] && v && typeof v === 'object' && 'create' in v)
+      const proprios = Object.fromEntries(Object.entries(data).filter(([k]) => !aninhados.some(([a]) => a === k)))
+      const r: Linha = { id: randomUUID(), criadoEm: new Date(), ...padroes(nome), ...proprios }
       // Prisma.DbNull grava NULL de verdade numa coluna JSON
       for (const k of Object.keys(r)) if (r[k] === Prisma.DbNull) r[k] = null
       t.push(r)
+      for (const [campo, v] of aninhados) {
+        const [destino, fk] = RELACOES[nome][campo]
+        for (const filho of ([] as Linha[]).concat(v.create)) modelo(destino).create({ data: { ...filho, [fk]: r.id } })
+      }
       return r
     }
     const apagar = (r: Linha) => {
-      if (nome === 'evento') for (const filho of t.filter((x) => x.eventoPaiId === r.id)) apagar(filho) // cascata
+      for (const [filho, fk] of CASCATA[nome] ?? []) {
+        const m = modelo(filho)
+        for (const f of (tabelas[filho] ?? []).filter((x) => x[fk] === r.id)) m.delete({ where: { id: f.id } })
+      }
       const i = t.indexOf(r)
       if (i >= 0) t.splice(i, 1)
     }
     return {
-      create: async ({ data, include }: Linha) => incluir(nome, novo(data), include),
+      create: async ({ data, include, select }: Linha) => incluir(nome, novo(data), include, select),
       createMany: async ({ data }: Linha) => { (data as Linha[]).forEach(novo); return { count: data.length } },
-      findUnique: async ({ where, include }: Linha) => { const r = t.find((x) => casa(x, where)); return r ? incluir(nome, r, include) : null },
-      findFirst: async ({ where, include, orderBy }: Linha = {}) => { const r = ordenar(t.filter((x) => casa(x, where)), orderBy)[0]; return r ? incluir(nome, r, include) : null },
+      findUnique: async ({ where, include, select }: Linha) => { const r = t.find((x) => casa(x, where)); return r ? incluir(nome, r, include, select) : null },
+      findFirst: async ({ where, include, select, orderBy }: Linha = {}) => { const r = ordenar(t.filter((x) => casa(x, where)), orderBy)[0]; return r ? incluir(nome, r, include, select) : null },
       findUniqueOrThrow: async ({ where }: Linha) => { const r = t.find((x) => casa(x, where)); if (!r) throw new Error('Registro não encontrado'); return r },
-      findMany: async ({ where, take, orderBy, include }: Linha = {}) =>
-        ordenar(t.filter((r) => casa(r, where)), orderBy).slice(0, take ?? Infinity).map((r) => incluir(nome, r, include)),
+      findMany: async ({ where, take, orderBy, include, select }: Linha = {}) =>
+        ordenar(t.filter((r) => casa(r, where)), orderBy).slice(0, take ?? Infinity).map((r) => incluir(nome, r, include, select)),
       update: async ({ where, data }: Linha) => {
         const r = t.find((x) => casa(x, where))
         if (!r) throw new Error('Registro não encontrado')

@@ -91,12 +91,13 @@ describe('manutenção com vários tipos por ativo, no PostgreSQL', () => {
   })
 
   it('dois tipos podem trocar de nome entre si na mesma edição', async () => {
-    const ar = await criarAtivo('Ar', [['A', 30], ['B', 60]])
+    const ar = await criarAtivo('Ar-condicionado', [['Limpeza', 30], ['Revisão', 60]])
     const r = await request(app).put(`/api/ativos/${ar.id}`).set(auth).send({
-      nome: 'Ar',
-      tipos: [{ id: tipoId(ar, 'A'), nome: 'B', periodicidadeDias: 30 }, { id: tipoId(ar, 'B'), nome: 'A', periodicidadeDias: 60 }],
+      nome: 'Ar-condicionado',
+      tipos: [{ id: tipoId(ar, 'Limpeza'), nome: 'Revisão', periodicidadeDias: 30 }, { id: tipoId(ar, 'Revisão'), nome: 'Limpeza', periodicidadeDias: 60 }],
     })
     expect(r.status).toBe(200)
+    expect(r.body.tipos.map((t: any) => [t.nome, t.periodicidadeDias]).sort()).toEqual([['Limpeza', 60], ['Revisão', 30]])
   })
 
   it('pendências do dashboard vêm por tipo, da mais urgente para a menos', async () => {
