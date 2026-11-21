@@ -28,6 +28,18 @@ export const telefone = z
   .max(25)
   .regex(/^[0-9+()\-\s]*$/, 'Telefone inválido.')
 
+/**
+ * ID de registro (formato 8-4-4-4-12 hexadecimal).
+ *
+ * Não usar `z.string().uuid()`: no Zod 4 ele exige a versão/variante do RFC 9562, e os
+ * cargos criados pela migração de 30/10/2026 (Auxiliar, Secretária) têm IDs gerados por
+ * md5 que não seguem isso — o cadastro de membros com esses cargos era recusado.
+ */
+export const idRegistro = z.guid('ID inválido.')
+
+/** Telefone obrigatório (cadastro de membros) */
+export const telefoneObrigatorio = telefone.min(8, 'Informe o telefone (com DDD).')
+
 /** Lê um enum de query string; valor desconhecido é ignorado. */
 export function enumQuery<T extends string>(valor: unknown, validos: readonly T[]): T | undefined {
   return typeof valor === 'string' && (validos as readonly string[]).includes(valor) ? (valor as T) : undefined

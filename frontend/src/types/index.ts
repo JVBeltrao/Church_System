@@ -97,28 +97,49 @@ export interface Manutencao {
   descricao: string
   responsavel: string
   criadoEm: string
+  tipoId?: string
+  tipo?: { id: string; nome: string }
 }
 
-export interface AtivoRelatorio {
+/** Um tipo de manutenção do ativo (ex.: "Limpeza" a cada 90 dias), com a situação calculada */
+export interface TipoManutencao {
   id: string
   nome: string
-  descricao?: string | null
   periodicidadeDias: number
   ultimaManutencao?: string | null
   proximaManutencao?: string | null
   status: StatusManutencao
-  manutencoes: Manutencao[]
 }
 
 export interface Ativo {
   id: string
   nome: string
   descricao?: string | null
-  periodicidadeDias: number
-  ultimaManutencao?: Manutencao | null
+  /** Do mais urgente para o menos */
+  tipos: TipoManutencao[]
+  /** Mais recente entre todos os tipos */
+  ultimaManutencao?: string | null
+  /** Mais próxima entre todos os tipos */
   proximaManutencao?: string | null
+  /** A situação do tipo mais urgente */
   status: StatusManutencao
   historico?: Manutencao[]
+}
+
+export interface AtivoRelatorio extends Ativo {
+  manutencoes: Manutencao[]
+}
+
+/** Uma pendência de manutenção (por tipo), como aparece no dashboard */
+export interface PendenciaManutencao {
+  ativoId: string
+  ativoNome: string
+  tipoId: string
+  tipoNome: string
+  periodicidadeDias: number
+  ultimaManutencao?: string | null
+  proximaManutencao?: string | null
+  status: StatusManutencao
 }
 
 // ─── Campanha ─────────────────────────────────────────────────────────────────
@@ -178,7 +199,8 @@ export interface DashboardData {
     alertas: number
     vencidos: number
     proximos: number
-    itens: Ativo[]
+    semRegistro: number
+    itens: PendenciaManutencao[]
   }
   contribuicoesPendentes: number
   doacoesPendentes: number

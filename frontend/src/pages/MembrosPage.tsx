@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CameraOff, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { CameraOff, Check, Download, Mail, Pencil, Phone, Plus, Search, Trash2, UserCheck, UserX, Users, X } from 'lucide-react'
 import api from '@/services/api'
 import type { Membro, Cargo, Categoria, ConjuntoMusical } from '@/types'
 import Button from '@/components/ui/Button'
@@ -13,6 +13,8 @@ import { mascararTelefone } from '@/utils/mascaraTelefone'
 import { formatarDiaMes } from '@/utils/data'
 import OrdenacaoSelect from '@/components/ui/OrdenacaoSelect'
 import { compararData, compararTexto, diasAteAniversario, ordenar, type OpcaoOrdenacao } from '@/utils/ordenacao'
+import { baixarArquivo, gerarCsvMembros, listaEmails, listaTelefones } from '@/utils/exportarMembros'
+import dayjs from 'dayjs'
 
 type OrdemMembros = 'nome' | 'nome-desc' | 'aniversario' | 'recentes' | 'antigos'
 const OPCOES_ORDEM_MEMBROS: OpcaoOrdenacao<OrdemMembros>[] = [
@@ -59,6 +61,33 @@ function Etiquetas({ itens, variant, prefixo = '' }: { itens: string[]; variant:
   )
 }
 
+/** Caixa de seleção com tamanho bom para o dedo no celular */
+function Marcar({ marcado, parcial, onChange, rotulo }: { marcado: boolean; parcial?: boolean; onChange: () => void; rotulo: string }) {
+  return (
+    <input
+      type="checkbox"
+      checked={marcado}
+      ref={(el) => { if (el) el.indeterminate = !!parcial && !marcado }}
+      onChange={onChange}
+      aria-label={rotulo}
+      className="w-4 h-4 rounded border-gray-300 text-primary-600 accent-primary-600 cursor-pointer"
+    />
+  )
+}
+
+/** Número de destaque no topo da página (total, ativos, inativos) */
+function Numero({ icone, valor, rotulo, cor }: { icone: React.ReactNode; valor: number; rotulo: string; cor: string }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${cor}`}>
+      <span className="flex-shrink-0" aria-hidden>{icone}</span>
+      <div>
+        <p className="text-2xl font-bold leading-none tabular-nums">{valor}</p>
+        <p className="text-xs font-medium mt-1 opacity-80">{rotulo}</p>
+      </div>
+    </div>
+  )
+}
+
 function SemImagem() {
   return (
     <span title="Não quer ter a imagem gravada" className="inline-flex text-amber-600" aria-label="Não quer ter a imagem gravada">
@@ -91,6 +120,10 @@ export default function MembrosPage() {
   const [excluindo, setExcluindo] = useState<Membro | null>(null)
   const [removendo, setRemovendo] = useState(false)
   const [erroAcao, setErroAcao] = useState('')
+
+  // Seleção para exportar (guarda o membro inteiro: continua valendo mesmo se um filtro o esconder)
+  const [selecionados, setSelecionados] = useState<Map<string, Membro>>(new Map())
+  const [copiado, setCopiado] = useState('')
 
   // Listas de apoio dos filtros e do formulário: uma vez só
   useEffect(() => {
@@ -165,6 +198,35 @@ export default function MembrosPage() {
   }
 
   const ativos = membros.filter((m) => m.status === 'ATIVO').length
+
+  // ── Seleção e exportação
+  const todosVisiveisMarcados = membros.length > 0 && membros.every((m) => selecionados.has(m.id))
+  const algumVisivelMarcado = membros.some((m) => selecionados.has(m.id))
+  function alternarSelecao(m: Membro) {
+    setSelecionados((atual) => {
+      const novo = new Map(atual)
+      if (novo.has(m.id)) novo.delete(m.id)
+      else novo.set(m.id, m)
+      return novo
+    })
+  }
+  function alternarTodos() {
+    setSelecionados((atual) => {
+      const novo = new Map(atual)
+      if (todosVisiveisMarcados) membros.forEach((m) => novo.delete(m.id))
+      else membros.forEach((m) => novo.set(m.id, m))
+      return novo
+    })
+  }
+  async function copiar(texto: string, aviso: string) {
+    try {
+      await navigator.clipboard.writeText(texto)
+      setCopiado(aviso)
+      setTimeout(() => setCopiado(''), 2500)
+    } catch {
+      setErroAcao('Não foi possível copiar. Tente pelo botão "Baixar planilha".')
+    }
+  }
   const ordenados = useMemo(() => {
     switch (ordem) {
       case 'nome-desc': return ordenar(membros, (a, b) => compararTexto(b.nomeCompleto, a.nomeCompleto))
@@ -174,6 +236,15 @@ export default function MembrosPage() {
       default: return ordenar(membros, (a, b) => compararTexto(a.nomeCompleto, b.nomeCompleto))
     }
   }, [membros, ordem])
+
+  /** O que vai ser exportado: os marcados, ou (sem nenhum marcado) a lista que está na tela, na ordem da tela */
+  const alvoExportacao = selecionados.size > 0
+    ? ordenados.filter((m) => selecionados.has(m.id)).concat([...selecionados.values()].filter((m) => !membros.some((x) => x.id === m.id)))
+    : ordenados
+  const semTelefone = alvoExportacao.filter((m) => !m.telefone).length
+  function exportarPlanilha() {
+    baixarArquivo(gerarCsvMembros(alvoExportacao), `membros-${dayjs().format('YYYY-MM-DD')}.csv`)
+  }
   const Acoes = ({ m }: { m: Membro }) => (
     <div className="flex gap-1 justify-end">
       <button
@@ -191,16 +262,18 @@ export default function MembrosPage() {
     <div className="p-4 sm:p-6 2xl:px-10">
       <PageHeader
         title="Membros"
-        subtitle={
-          <span aria-live="polite">
-            {primeiraCarga
-              ? 'Carregando…'
-              : `${membros.length} ${filtrando ? (membros.length === 1 ? 'resultado' : 'resultados') : membros.length === 1 ? 'cadastrado' : 'cadastrados'}`}
-            {!primeiraCarga && membros.length > 0 && ` — ${ativos} ativo${ativos !== 1 ? 's' : ''}, ${membros.length - ativos} inativo${membros.length - ativos !== 1 ? 's' : ''}`}
-          </span>
-        }
+        subtitle={primeiraCarga ? 'Carregando…' : 'Marque membros para baixar a planilha ou copiar os contatos'}
         actions={<Button onClick={abrirNovo}><Plus size={16} aria-hidden /> Novo membro</Button>}
       />
+
+      {/* Contagem */}
+      {!primeiraCarga && (
+        <div className="grid grid-cols-3 gap-3 mb-4" aria-live="polite">
+          <Numero icone={<Users size={22} />} valor={membros.length} rotulo={filtrando ? 'Encontrados' : 'Total de membros'} cor="bg-primary-50 border-primary-100 text-primary-700" />
+          <Numero icone={<UserCheck size={22} />} valor={ativos} rotulo="Ativos" cor="bg-green-50 border-green-100 text-green-700" />
+          <Numero icone={<UserX size={22} />} valor={membros.length - ativos} rotulo="Inativos" cor="bg-gray-50 border-gray-200 text-gray-600" />
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 mb-4 space-y-3">
@@ -257,6 +330,49 @@ export default function MembrosPage() {
         )}
       </div>
 
+      {/* Seleção e exportação */}
+      {!primeiraCarga && membros.length > 0 && (
+        <div className={`sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${selecionados.size > 0 ? 'bg-primary-600 border-primary-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-700'}`}>
+          <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer mr-1">
+            <Marcar marcado={todosVisiveisMarcados} parcial={algumVisivelMarcado} onChange={alternarTodos} rotulo={todosVisiveisMarcados ? 'Desmarcar todos' : 'Marcar todos da lista'} />
+            {selecionados.size > 0
+              ? `${selecionados.size} selecionado${selecionados.size !== 1 ? 's' : ''}`
+              : `Marcar todos (${membros.length})`}
+          </label>
+          <span className={`text-xs ${selecionados.size > 0 ? 'text-primary-100' : 'text-gray-400'}`}>
+            {selecionados.size > 0 ? 'As ações valem para os selecionados' : 'Sem seleção, as ações valem para a lista da tela'}
+          </span>
+          <div className="flex flex-wrap gap-1.5 ml-auto">
+            {([
+              { texto: 'Baixar planilha', Icone: Download, acao: exportarPlanilha },
+              { texto: 'Copiar telefones', Icone: Phone, acao: () => copiar(listaTelefones(alvoExportacao), 'Telefones copiados') },
+              { texto: 'Copiar e-mails', Icone: Mail, acao: () => copiar(listaEmails(alvoExportacao), 'E-mails copiados') },
+            ] as const).map(({ texto, Icone, acao }) => (
+              <button
+                key={texto}
+                type="button"
+                onClick={acao}
+                className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+                  selecionados.size > 0 ? 'bg-white/15 hover:bg-white/25 focus-visible:ring-white' : 'border border-gray-300 hover:bg-gray-50 focus-visible:ring-primary-300'
+                }`}
+              >
+                <Icone size={14} aria-hidden /> {texto}
+              </button>
+            ))}
+            {selecionados.size > 0 && (
+              <button type="button" onClick={() => setSelecionados(new Map())} className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-sm hover:bg-white/15">
+                <X size={14} aria-hidden /> Limpar
+              </button>
+            )}
+          </div>
+          {copiado && (
+            <p role="status" className={`w-full text-xs inline-flex items-center gap-1 ${selecionados.size > 0 ? 'text-white' : 'text-green-700'}`}>
+              <Check size={13} aria-hidden /> {copiado}{semTelefone > 0 && copiado.startsWith('Telefones') ? ` (${semTelefone} sem telefone cadastrado)` : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       {erroLista && <p role="alert" className="mb-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{erroLista}</p>}
       {erroAcao && <p role="alert" className="mb-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{erroAcao}</p>}
 
@@ -281,6 +397,7 @@ export default function MembrosPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="w-10 pl-4 py-3"><span className="sr-only">Selecionar</span></th>
                   {['Membro', 'Cargos', 'Categorias e conjuntos', 'Aniversário', 'Situação'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500">{h}</th>
                   ))}
@@ -289,7 +406,8 @@ export default function MembrosPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {ordenados.map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50/70 align-middle">
+                  <tr key={m.id} className={`align-middle ${selecionados.has(m.id) ? 'bg-primary-50/70' : 'hover:bg-gray-50/70'}`}>
+                    <td className="pl-4 py-3"><Marcar marcado={selecionados.has(m.id)} onChange={() => alternarSelecao(m)} rotulo={`Selecionar ${m.nomeCompleto}`} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar nome={m.nomeCompleto} />
@@ -327,8 +445,9 @@ export default function MembrosPage() {
           {/* Celular: cartões */}
           <ul className="md:hidden space-y-2.5">
             {ordenados.map((m) => (
-              <li key={m.id} className="bg-white rounded-xl border border-gray-200 p-3.5">
+              <li key={m.id} className={`rounded-xl border p-3.5 ${selecionados.has(m.id) ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'}`}>
                 <div className="flex items-start gap-3">
+                  <span className="pt-3"><Marcar marcado={selecionados.has(m.id)} onChange={() => alternarSelecao(m)} rotulo={`Selecionar ${m.nomeCompleto}`} /></span>
                   <Avatar nome={m.nomeCompleto} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 flex items-center gap-1.5">

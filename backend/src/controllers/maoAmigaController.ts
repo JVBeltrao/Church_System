@@ -3,16 +3,16 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import prisma from '../utils/prisma'
 import { AppError } from '../utils/AppError'
-import { enumQuery, textoCurto, textoLongo, urlHttp } from '../utils/validacao'
+import { enumQuery, textoCurto, textoLongo, urlHttp, idRegistro } from '../utils/validacao'
 
 const doacaoSchema = z.object({
-  membroId: z.string().uuid().optional().nullable(),
+  membroId: idRegistro.optional().nullable(),
   nomeDoador: textoLongo(120),
   data: z.string().refine((d) => !Number.isNaN(Date.parse(d)), 'Data inválida.'),
   itemDoado: textoCurto(2, 120),
   quantidade: z.string().trim().min(1).max(60),
   quantidadeNumerica: z.number().positive().max(100_000).optional().nullable(),
-  metaCestaId: z.string().uuid().optional().nullable(),
+  metaCestaId: idRegistro.optional().nullable(),
   tipo: z.enum(['FISICA', 'PIX']),
   comprovanteUrl: urlHttp.optional().nullable(),
 })
@@ -28,7 +28,7 @@ const doacaoPublicaSchema = z.object({
   itens: z
     .array(
       z.object({
-        metaCestaId: z.string().uuid(),
+        metaCestaId: idRegistro,
         quantidade: z.number().positive('Quantidade deve ser positiva.').max(10_000),
       })
     )

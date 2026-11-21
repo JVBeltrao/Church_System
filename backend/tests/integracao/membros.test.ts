@@ -15,7 +15,7 @@ beforeEach(async () => {
 afterAll(() => prisma.$disconnect())
 
 const criarCargo = async (nome: string) => (await request(app).post('/api/cargos').set(auth).send({ nome })).body.id as string
-const criarMembro = (dados: Record<string, unknown>) => request(app).post('/api/membros').set(auth).send(dados)
+const criarMembro = (dados: Record<string, unknown>) => request(app).post('/api/membros').set(auth).send({ telefone: '83999990000', ...dados })
 
 describe('membros no PostgreSQL', () => {
   it('cadastra com cargos e grava as ligações na tabela membro_cargos', async () => {
@@ -67,13 +67,31 @@ describe('membros no PostgreSQL', () => {
     const [a, b] = [await criarCargo('Pastor'), await criarCargo('Secretária')]
     const { body: membro } = await criarMembro({ nomeCompleto: 'Rute', cargoIds: [a] })
 
-    const r = await request(app).put(`/api/membros/${membro.id}`).set(auth).send({ nomeCompleto: 'Rute', cargoIds: [b] })
+    const r = await request(app).put(`/api/membros/${membro.id}`).set(auth).send({ nomeCompleto: 'Rute', telefone: '83999990000', cargoIds: [b] })
     expect(r.status).toBe(200)
     expect((await prisma.membroCargo.findMany()).map((x) => x.cargoId)).toEqual([b])
 
     expect((await request(app).delete(`/api/membros/${membro.id}`).set(auth)).status).toBe(204)
     expect(await prisma.membroCargo.count()).toBe(0)
     expect((await request(app).get(`/api/membros/${membro.id}`).set(auth)).status).toBe(404)
+  })
+
+  it('regressão (avaliação, tarefa A2): cadastra com os cargos criados pela migração (Auxiliar, Secretária)', async () => {
+    // Mesmo jeito que a migração 20261030000000 criou esses cargos: ID vindo de md5, fora do padrão de versão do UUID
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "cargos" ("id", "nome", "descricao") VALUES (md5('secretaria')::uuid::text, 'Secretária', 'Secretaria da igreja')`
+    )
+    const secretaria = await prisma.cargo.findFirstOrThrow({ where: { nome: 'Secretária' } })
+    const r = await criarMembro({ nomeCompleto: 'Irmã Maria', dataNascimento: '1975-03-02', cargoIds: [secretaria.id] })
+    expect(r.status).toBe(201)
+    expect(r.body.cargos[0].cargo.nome).toBe('Secretária')
+  })
+
+  it('telefone é obrigatório', async () => {
+    const r = await request(app).post('/api/membros').set(auth).send({ nomeCompleto: 'Sem Telefone' })
+    expect(r.status).toBe(400)
+    expect(r.body.detalhes.join(' ')).toMatch(/telefone/i)
+    expect(await prisma.membro.count()).toBe(0)
   })
 
   it('e-mail inválido → 400 e nada é gravado', async () => {

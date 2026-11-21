@@ -103,13 +103,20 @@ async function main() {
   console.log('✅ Eventos criados')
 
   // Ativos
-  const ativo1 = await prisma.ativo.create({ data: { nome: 'Filtro do ar-condicionado', descricao: 'Ar-condicionado da sala principal', periodicidadeDias: 90 } })
-  const ativo2 = await prisma.ativo.create({ data: { nome: 'Extintor — sala principal', descricao: 'Extintor de incêndio tipo ABC', periodicidadeDias: 365 } })
-  await prisma.ativo.create({ data: { nome: "Caixa d'água", descricao: 'Limpeza e higienização', periodicidadeDias: 180 } })
-  await prisma.ativo.create({ data: { nome: 'Instalação elétrica', descricao: 'Revisão geral', periodicidadeDias: 365 } })
+  const criarAtivo = (nome: string, descricao: string, tipos: [string, number][]) =>
+    prisma.ativo.create({
+      data: { nome, descricao, tipos: { create: tipos.map(([n, periodicidadeDias]) => ({ nome: n, periodicidadeDias })) } },
+      include: { tipos: true },
+    })
+  const ar = await criarAtivo('Ar-condicionado — salão principal', 'Split 60.000 BTU', [['Limpeza', 90], ['Troca do filtro', 180], ['Recarga de gás', 365]])
+  const extintor = await criarAtivo('Extintor — sala principal', 'Extintor de incêndio tipo ABC', [['Recarga e vistoria', 365]])
+  await criarAtivo("Caixa d'água", 'Reservatório principal', [['Limpeza e higienização', 180]])
+  await criarAtivo('Instalação elétrica', 'Quadro e fiação', [['Revisão geral', 365]])
 
-  await prisma.manutencao.create({ data: { ativoId: ativo1.id, data: new Date('2026-06-01'), descricao: 'Troca do filtro', responsavel: 'José Santos', realizadaPor: admin.id } })
-  await prisma.manutencao.create({ data: { ativoId: ativo2.id, data: new Date('2025-10-15'), descricao: 'Recarga e vistoria', responsavel: 'Empresa Extintores JP', realizadaPor: admin.id } })
+  const tipo = (a: typeof ar, nome: string) => a.tipos.find((t) => t.nome === nome)!.id
+  await prisma.manutencao.create({ data: { ativoId: ar.id, tipoId: tipo(ar, 'Limpeza'), data: new Date('2026-06-01'), descricao: 'Limpeza dos aparelhos', responsavel: 'José Santos', realizadaPor: admin.id } })
+  await prisma.manutencao.create({ data: { ativoId: ar.id, tipoId: tipo(ar, 'Troca do filtro'), data: new Date('2026-06-01'), descricao: 'Troca dos filtros', responsavel: 'José Santos', realizadaPor: admin.id } })
+  await prisma.manutencao.create({ data: { ativoId: extintor.id, tipoId: tipo(extintor, 'Recarga e vistoria'), data: new Date('2025-10-15'), descricao: 'Recarga e vistoria', responsavel: 'Empresa Extintores JP', realizadaPor: admin.id } })
   console.log('✅ Ativos e manutenções criados')
 
   // Itens da Campanha

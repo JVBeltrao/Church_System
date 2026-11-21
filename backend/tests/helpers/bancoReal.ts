@@ -18,7 +18,7 @@ if (!/test/i.test(nomeBanco)) {
 export const prisma = new PrismaClient()
 
 const TABELAS = [
-  'tokens_recuperacao_senha', 'notificacoes_manutencao', 'manutencoes', 'ativos',
+  'tokens_recuperacao_senha', 'notificacoes_manutencao', 'manutencoes', 'tipos_manutencao', 'ativos',
   'membro_cargos', 'membro_categorias', 'membro_conjuntos', 'membros', 'cargos', 'categorias', 'conjuntos_musicais',
   'eventos', 'contribuicoes', 'itens_campanha', 'doacoes_alimentos', 'metas_cesta', 'configuracao_igreja', 'usuarios',
 ]

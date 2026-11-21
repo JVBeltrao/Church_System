@@ -263,70 +263,65 @@ async function main() {
   })
   console.log('✅ Eventos: recorrentes, únicos, especiais e um já realizado')
 
-  // ── Manutenção: um ativo em cada situação (vencido, próximo, em dia, sem registro)
-  const ativosDemo: { nome: string; descricao: string; periodicidadeDias: number; historico: [number, string, string][] }[] = [
+  // ── Manutenção: cada ativo com seus tipos de manutenção (prazos diferentes) e situações variadas.
+  // historico: [dias atrás, descrição, responsável]
+  type TipoDemo = { nome: string; periodicidadeDias: number; historico: [number, string, string][] }
+  const ativosDemo: { nome: string; descricao: string; tipos: TipoDemo[] }[] = [
     {
       nome: 'Ar-condicionado — salão principal',
       descricao: 'Dois aparelhos split de 60.000 BTU',
-      periodicidadeDias: 180,
-      historico: [
-        [215, 'Limpeza geral e troca dos filtros', 'Refrigeração Santos'],
-        [395, 'Recarga de gás', 'Refrigeração Santos'],
-        [580, 'Instalação dos aparelhos', 'Refrigeração Santos'],
+      tipos: [
+        { nome: 'Limpeza', periodicidadeDias: 90, historico: [[75, 'Limpeza das serpentinas e bandejas', 'Refrigeração Santos'], [170, 'Limpeza geral', 'Refrigeração Santos']] },
+        { nome: 'Troca do filtro', periodicidadeDias: 180, historico: [[215, 'Troca dos filtros', 'Refrigeração Santos']] },
+        { nome: 'Recarga de gás', periodicidadeDias: 365, historico: [[395, 'Recarga de gás R-410A', 'Refrigeração Santos']] },
       ],
     },
     {
       nome: 'Bomba d’água',
       descricao: 'Bomba do reservatório',
-      periodicidadeDias: 90,
-      historico: [
-        [70, 'Troca do rolamento', 'Eletro Bombas'],
-        [160, 'Revisão geral', 'Eletro Bombas'],
-      ],
+      tipos: [{ nome: 'Revisão', periodicidadeDias: 90, historico: [[70, 'Troca do rolamento', 'Eletro Bombas'], [160, 'Revisão geral', 'Eletro Bombas']] }],
     },
     {
       nome: 'Extintores de incêndio',
       descricao: '6 extintores tipo ABC',
-      periodicidadeDias: 365,
-      historico: [
-        [200, 'Recarga e vistoria anual', 'Extintores JP'],
-        [565, 'Recarga e vistoria anual', 'Extintores JP'],
+      tipos: [
+        { nome: 'Recarga e vistoria', periodicidadeDias: 365, historico: [[200, 'Recarga e vistoria anual', 'Extintores JP'], [565, 'Recarga e vistoria anual', 'Extintores JP']] },
+        { nome: 'Teste hidrostático', periodicidadeDias: 1825, historico: [] },
       ],
     },
     {
       nome: 'Caixa d’água',
-      descricao: 'Limpeza e higienização',
-      periodicidadeDias: 180,
-      historico: [
-        [40, 'Limpeza e higienização', 'José Santos'],
-        [225, 'Limpeza e higienização', 'José Santos'],
-      ],
+      descricao: 'Reservatório principal',
+      tipos: [{ nome: 'Limpeza e higienização', periodicidadeDias: 180, historico: [[40, 'Limpeza e higienização', 'José Santos'], [225, 'Limpeza e higienização', 'José Santos']] }],
     },
     {
       nome: 'Gerador',
       descricao: 'Gerador de emergência',
-      periodicidadeDias: 120,
-      historico: [[30, 'Teste de carga e troca de óleo', 'Mecânica Silva']],
+      tipos: [
+        { nome: 'Troca de óleo', periodicidadeDias: 120, historico: [[30, 'Troca de óleo', 'Mecânica Silva']] },
+        { nome: 'Teste de carga', periodicidadeDias: 30, historico: [[30, 'Teste de carga', 'Mecânica Silva']] },
+      ],
     },
-    { nome: 'Instalação elétrica', descricao: 'Revisão geral do quadro e da fiação', periodicidadeDias: 365, historico: [] },
+    { nome: 'Instalação elétrica', descricao: 'Quadro e fiação', tipos: [{ nome: 'Revisão geral', periodicidadeDias: 365, historico: [] }] },
   ]
   for (const a of ativosDemo) {
     const ativo = await prisma.ativo.create({
-      data: { nome: a.nome, descricao: a.descricao, periodicidadeDias: a.periodicidadeDias },
+      data: { nome: a.nome, descricao: a.descricao, tipos: { create: a.tipos.map(({ nome, periodicidadeDias }) => ({ nome, periodicidadeDias })) } },
+      include: { tipos: true },
     })
-    if (a.historico.length > 0) {
-      await prisma.manutencao.createMany({
-        data: a.historico.map(([diasAtras, descricao, responsavel]) => ({
-          ativoId: ativo.id,
-          data: dia(-diasAtras),
-          descricao,
-          responsavel,
-          realizadaPor: admin.id,
-        })),
-      })
-    }
+    const historico = a.tipos.flatMap((t) =>
+      t.historico.map(([diasAtras, descricao, responsavel]) => ({
+        ativoId: ativo.id,
+        tipoId: ativo.tipos.find((x) => x.nome === t.nome)!.id,
+        data: dia(-diasAtras),
+        descricao,
+        responsavel,
+        realizadaPor: admin.id,
+      }))
+    )
+    if (historico.length > 0) await prisma.manutencao.createMany({ data: historico })
   }
-  console.log('✅ Ativos: vencido, próximo do vencimento, em dia e sem registro (com histórico)')
+  console.log('✅ Ativos com vários tipos de manutenção: vencidos, próximos, em dia e sem registro')
 
   // ── Campanha: itens concluído, em andamento, só com pendentes e não iniciado
   const pix = 'igreja.adju@gmail.com'

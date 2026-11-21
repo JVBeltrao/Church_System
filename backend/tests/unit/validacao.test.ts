@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { enumQuery, telefone, textoCurto, textoLongo, urlHttp } from '../../src/utils/validacao'
+import { enumQuery, idRegistro, telefone, telefoneObrigatorio, textoCurto, textoLongo, urlHttp } from '../../src/utils/validacao'
 
 describe('urlHttp — links de comprovante e redes sociais', () => {
   it.each(['https://exemplo.com/comprovante.png', 'http://igreja.org'])('aceita %s', (u) => {
@@ -33,5 +33,25 @@ describe('enumQuery', () => {
     expect(enumQuery('ATIVO', ['ATIVO', 'INATIVO'] as const)).toBe('ATIVO')
     expect(enumQuery('QUALQUER', ['ATIVO', 'INATIVO'] as const)).toBeUndefined()
     expect(enumQuery(['ATIVO'], ['ATIVO'] as const)).toBeUndefined()
+  })
+})
+
+describe('idRegistro — IDs de cargos, categorias e conjuntos', () => {
+  it('aceita UUID v4 (gerado pelo Prisma)', () => {
+    expect(idRegistro.safeParse('3f2b8c1e-9a4d-4f6b-8e2a-1c5d7e9f0a3b').success).toBe(true)
+  })
+  it('aceita os IDs criados pela migração (md5, sem versão do RFC) — regressão do erro no cadastro da avaliação', () => {
+    expect(idRegistro.safeParse('9e107d9d-372b-b682-6b6c-c1b55a1f1d3e').success).toBe(true)
+  })
+  it('recusa texto que não é um ID', () => {
+    expect(idRegistro.safeParse('cargo-auxiliar').success).toBe(false)
+    expect(idRegistro.safeParse("1' OR '1'='1").success).toBe(false)
+  })
+})
+
+describe('telefoneObrigatorio', () => {
+  it('exige o telefone no cadastro de membros', () => {
+    expect(telefoneObrigatorio.safeParse('').success).toBe(false)
+    expect(telefoneObrigatorio.safeParse('83999990000').success).toBe(true)
   })
 })

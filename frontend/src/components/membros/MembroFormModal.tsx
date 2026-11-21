@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, CameraOff } from 'lucide-react'
-import api from '@/services/api'
+import api, { mensagemDeErro } from '@/services/api'
 import type { Membro, Cargo, Categoria, ConjuntoMusical } from '@/types'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -107,13 +107,17 @@ export default function MembroFormModal({ open, editing, cargos, categorias, con
       setErro('Informe o nome completo.')
       return
     }
+    if (limparTelefone(form.telefone).replace(/\D/g, '').length < 10) {
+      setErro('Informe o telefone com DDD.')
+      return
+    }
     setErro('')
     setSaving(true)
     const payload = {
       ...form,
       nomeCompleto: form.nomeCompleto.trim(),
       dataNascimento: form.dataNascimento || null,
-      telefone: form.telefone ? limparTelefone(form.telefone) : null,
+      telefone: limparTelefone(form.telefone),
       email: form.email.trim() || null,
       endereco: form.endereco.trim() || null,
     }
@@ -122,8 +126,7 @@ export default function MembroFormModal({ open, editing, cargos, categorias, con
       else await api.post('/membros', payload)
       onSaved()
     } catch (e) {
-      const data = (e as { response?: { data?: { error?: string; detalhes?: string[] } } })?.response?.data
-      setErro(data?.detalhes?.[0] ?? data?.error ?? 'Não foi possível salvar o membro. Tente novamente.')
+      setErro(mensagemDeErro(e, 'Não foi possível salvar o membro. Tente novamente.'))
     } finally {
       setSaving(false)
     }
@@ -146,8 +149,9 @@ export default function MembroFormModal({ open, editing, cargos, categorias, con
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Data de nascimento" type="date" value={form.dataNascimento} onChange={(e) => setForm((f) => ({ ...f, dataNascimento: e.target.value }))} />
             <Input
-              label="Telefone"
+              label="Telefone *"
               inputMode="numeric"
+              required
               placeholder="(83) 99999-0001"
               value={form.telefone}
               onChange={(e) => setForm((f) => ({ ...f, telefone: mascararTelefone(e.target.value) }))}

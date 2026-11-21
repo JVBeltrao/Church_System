@@ -69,8 +69,8 @@ describe('Mão Amiga no PostgreSQL', () => {
 
 describe('dashboard', () => {
   it('conta membros ativos e pendências', async () => {
-    await request(app).post('/api/membros').set(auth).send({ nomeCompleto: 'Ana' })
-    await request(app).post('/api/membros').set(auth).send({ nomeCompleto: 'Bruno', status: 'INATIVO' })
+    await request(app).post('/api/membros').set(auth).send({ nomeCompleto: 'Ana', telefone: '83999990001' })
+    await request(app).post('/api/membros').set(auth).send({ nomeCompleto: 'Bruno', telefone: '83999990002', status: 'INATIVO' })
     const r = await request(app).get('/api/dashboard').set(auth)
     expect(r.status).toBe(200)
     expect(r.body.membros.total).toBe(1)

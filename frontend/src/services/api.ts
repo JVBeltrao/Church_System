@@ -28,7 +28,8 @@ api.interceptors.response.use(
 /** Mensagem amigável a partir de um erro de requisição. */
 export function mensagemDeErro(e: unknown, padrao = 'Algo deu errado. Tente novamente.'): string {
   const r = (e as { response?: { data?: { error?: string; detalhes?: string[] } } })?.response?.data
-  if (r?.detalhes?.length) return r.detalhes.join(' ')
+  // A API manda "campo.0: mensagem"; para a pessoa, só a mensagem interessa
+  if (r?.detalhes?.length) return [...new Set(r.detalhes.map((d) => d.replace(/^[\w.]+: /, '')))].join(' ')
   return r?.error ?? padrao
 }
 

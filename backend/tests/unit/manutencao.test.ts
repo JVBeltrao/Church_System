@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { calcularProximaManutencao, calcularStatus } from '../../src/utils/manutencao'
+import { calcularProximaManutencao, calcularStatus, resumirAtivo, situacaoDoTipo } from '../../src/utils/manutencao'
 
 describe('calcularProximaManutencao', () => {
   it('soma a periodicidade à data da última manutenção', () => {
@@ -24,4 +24,49 @@ describe('calcularStatus (derivado na hora, nunca gravado)', () => {
   it('vence hoje → PROXIMO (ainda não venceu)', () => expect(calcularStatus(dia(12))).toBe('PROXIMO'))
   it('faltam exatamente 30 dias → PROXIMO (limite do aviso)', () => expect(calcularStatus(dia(12, 12))).toBe('PROXIMO'))
   it('faltam 31 dias → EM_DIA', () => expect(calcularStatus(dia(13, 12))).toBe('EM_DIA'))
+})
+
+describe('vários tipos de manutenção no mesmo ativo', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 10, 21, 10, 0)) }) // 21/11/2026
+  afterEach(() => vi.useRealTimers())
+
+  const diasAtras = (n: number) => new Date(2026, 10, 21 - n)
+  const ar = {
+    id: 'ar',
+    nome: 'Ar-condicionado',
+    tipos: [
+      { id: 'limpeza', nome: 'Limpeza', periodicidadeDias: 90, manutencoes: [{ data: diasAtras(10) }] },      // em dia (faltam 80)
+      { id: 'filtro', nome: 'Troca do filtro', periodicidadeDias: 180, manutencoes: [{ data: diasAtras(160) }] }, // próxima (faltam 20)
+      { id: 'gas', nome: 'Recarga de gás', periodicidadeDias: 365, manutencoes: [{ data: diasAtras(400) }] },   // vencida
+    ],
+  }
+
+  it('cada tipo tem a sua situação, calculada com o seu próprio prazo', () => {
+    expect(situacaoDoTipo(ar.tipos[0]).status).toBe('EM_DIA')
+    expect(situacaoDoTipo(ar.tipos[1]).status).toBe('PROXIMO')
+    expect(situacaoDoTipo(ar.tipos[2]).status).toBe('VENCIDO')
+  })
+
+  it('a limpeza de hoje não "zera" o prazo da recarga de gás', () => {
+    const r = resumirAtivo(ar)
+    expect(r.tipos.find((t) => t.id === 'gas')!.status).toBe('VENCIDO')
+  })
+
+  it('o ativo fica com a situação do tipo mais urgente, e os tipos vêm do mais urgente para o menos', () => {
+    const r = resumirAtivo(ar)
+    expect(r.status).toBe('VENCIDO')
+    expect(r.tipos.map((t) => t.id)).toEqual(['gas', 'filtro', 'limpeza'])
+  })
+
+  it('última = a mais recente entre os tipos; próxima = a mais próxima', () => {
+    const r = resumirAtivo(ar)
+    expect(r.ultimaManutencao).toEqual(diasAtras(10))
+    expect(r.proximaManutencao).toEqual(new Date(2026, 10, 21 - 400 + 365))
+  })
+
+  it('tipo nunca feito → SEM_REGISTRO (mais urgente que "vence em breve")', () => {
+    const r = resumirAtivo({ tipos: [ar.tipos[1], { id: 'novo', nome: 'Revisão', periodicidadeDias: 30, manutencoes: [] }] })
+    expect(r.status).toBe('SEM_REGISTRO')
+    expect(r.tipos[0].ultimaManutencao).toBeNull()
+  })
 })
