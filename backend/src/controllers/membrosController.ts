@@ -3,7 +3,7 @@ import { z } from 'zod'
 import prisma from '../utils/prisma'
 import { AppError } from '../utils/AppError'
 import { diasAteAniversario, proximoAniversario } from '../utils/aniversario'
-import { enumQuery, telefone, textoCurto, textoLongo, urlHttp } from '../utils/validacao'
+import { enumQuery, idRegistro, telefoneObrigatorio, textoCurto, textoLongo, urlHttp } from '../utils/validacao'
 
 const membroSchema = z.object({
   nomeCompleto: textoCurto(2, 150),
@@ -12,14 +12,14 @@ const membroSchema = z.object({
     .refine((d) => !Number.isNaN(Date.parse(d)), 'Data de nascimento inválida.')
     .optional()
     .nullable(),
-  telefone: telefone.optional().nullable(),
+  telefone: telefoneObrigatorio,
   email: z.string().trim().email('E-mail inválido.').max(254).optional().nullable(),
   endereco: textoLongo(250),
   fotoUrl: urlHttp.optional().nullable(),
   status: z.enum(['ATIVO', 'INATIVO']).default('ATIVO'),
-  cargoIds: z.array(z.string().uuid()).max(50).optional(),
-  categoriaIds: z.array(z.string().uuid()).max(50).optional(),
-  conjuntoIds: z.array(z.string().uuid()).max(50).optional(),
+  cargoIds: z.array(idRegistro).max(50).optional(),
+  categoriaIds: z.array(idRegistro).max(50).optional(),
+  conjuntoIds: z.array(idRegistro).max(50).optional(),
   naoQuerImagemGravada: z.boolean().optional(),
 })
 

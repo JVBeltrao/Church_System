@@ -174,45 +174,65 @@ enum RecorrenciaEvento {
 // ─── Manutenção ──────────────────────────────────────────────────────────────
 
 model Ativo {
-  id                String       @id @default(uuid())
-  nome              String
-  descricao         String?
-  periodicidadeDias Int          @map("periodicidade_dias")
-  criadoEm          DateTime     @default(now()) @map("criado_em")
-  atualizadoEm      DateTime     @updatedAt @map("atualizado_em")
+  id           String   @id @default(uuid())
+  nome         String
+  descricao    String?
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  manutencoes    Manutencao[]
-  notificacoes   NotificacaoManutencao[]
+  /// Cada ativo tem um ou mais tipos de manutenção, cada um com o seu prazo
+  /// (ex.: ar-condicionado → limpeza a cada 90 dias, troca do filtro a cada 180, recarga de gás a cada 365).
+  tipos       TipoManutencao[]
+  manutencoes Manutencao[]
 
   @@map("ativos")
+}
+
+model TipoManutencao {
+  id                String   @id @default(uuid())
+  ativoId           String   @map("ativo_id")
+  nome              String
+  periodicidadeDias Int      @map("periodicidade_dias")
+  criadoEm          DateTime @default(now()) @map("criado_em")
+
+  ativo        Ativo                   @relation(fields: [ativoId], references: [id], onDelete: Cascade)
+  manutencoes  Manutencao[]
+  notificacoes NotificacaoManutencao[]
+
+  @@unique([ativoId, nome])
+  @@map("tipos_manutencao")
 }
 
 model Manutencao {
   id           String   @id @default(uuid())
   ativoId      String   @map("ativo_id")
+  tipoId       String   @map("tipo_id")
   data         DateTime @db.Date
   descricao    String
   responsavel  String
   realizadaPor String?  @map("realizada_por")
   criadoEm     DateTime @default(now()) @map("criado_em")
 
-  ativo   Ativo    @relation(fields: [ativoId], references: [id], onDelete: Cascade)
-  usuario Usuario? @relation(fields: [realizadaPor], references: [id])
+  ativo   Ativo          @relation(fields: [ativoId], references: [id], onDelete: Cascade)
+  tipo    TipoManutencao @relation(fields: [tipoId], references: [id], onDelete: Cascade)
+  usuario Usuario?       @relation(fields: [realizadaPor], references: [id])
 
   @@index([ativoId, data])
+  @@index([tipoId, data])
   @@map("manutencoes")
 }
 
+/// Aviso já enviado (por tipo de manutenção), para não repetir no mesmo ciclo
 model NotificacaoManutencao {
-  id        String            @id @default(uuid())
-  ativoId   String            @map("ativo_id")
+  id        String           @id @default(uuid())
+  tipoId    String           @map("tipo_id")
   canal     CanalNotificacao
   status    String
-  enviadoEm DateTime          @default(now()) @map("enviado_em")
+  enviadoEm DateTime         @default(now()) @map("enviado_em")
 
-  ativo Ativo @relation(fields: [ativoId], references: [id], onDelete: Cascade)
+  tipo TipoManutencao @relation(fields: [tipoId], references: [id], onDelete: Cascade)
 
-  @@unique([ativoId, status, canal], name: "unico_por_ciclo")
+  @@unique([tipoId, status, canal], name: "unico_por_ciclo")
   @@map("notificacoes_manutencao")
 }
 

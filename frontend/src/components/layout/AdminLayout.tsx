@@ -1,17 +1,19 @@
-import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import api from '@/services/api'
 import { Menu, LayoutDashboard, Users, Cake, CalendarDays, Wrench, Gift, HeartHandshake, KeyRound, LogOut, Church, ExternalLink } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AlterarSenhaModal from './AlterarSenhaModal'
 
+// Cada módulo tem a sua cor (a mesma dos indicadores do dashboard)
 const nav = [
-  { to: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
-  { to: '/membros',      label: 'Membros',      icon: Users },
-  { to: '/aniversarios', label: 'Aniversários', icon: Cake },
-  { to: '/eventos',      label: 'Eventos',      icon: CalendarDays },
-  { to: '/manutencao',   label: 'Manutenção',   icon: Wrench },
-  { to: '/campanha',     label: 'Campanha',     icon: Gift },
-  { to: '/mao-amiga',    label: 'Mão Amiga',    icon: HeartHandshake },
+  { to: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard, cor: 'text-primary-500', ativo: 'bg-primary-50 text-primary-700' },
+  { to: '/membros',      label: 'Membros',      icon: Users,           cor: 'text-violet-500',  ativo: 'bg-violet-50 text-violet-700' },
+  { to: '/aniversarios', label: 'Aniversários', icon: Cake,            cor: 'text-pink-500',    ativo: 'bg-pink-50 text-pink-700' },
+  { to: '/eventos',      label: 'Eventos',      icon: CalendarDays,    cor: 'text-blue-500',    ativo: 'bg-blue-50 text-blue-700' },
+  { to: '/manutencao',   label: 'Manutenção',   icon: Wrench,          cor: 'text-amber-600',   ativo: 'bg-amber-50 text-amber-800' },
+  { to: '/campanha',     label: 'Campanha',     icon: Gift,            cor: 'text-orange-500',  ativo: 'bg-orange-50 text-orange-700' },
+  { to: '/mao-amiga',    label: 'Mão Amiga',    icon: HeartHandshake,  cor: 'text-teal-600',    ativo: 'bg-teal-50 text-teal-700' },
 ]
 
 const itemRodape =
@@ -22,6 +24,15 @@ export default function AdminLayout() {
   const navigate = useNavigate()
   const [menuAberto, setMenuAberto] = useState(false)
   const [senhaAberta, setSenhaAberta] = useState(false)
+  const { pathname } = useLocation()
+
+  // Manutenções vencidas: contador vermelho no menu (atualiza a cada troca de página)
+  const [vencidas, setVencidas] = useState(0)
+  useEffect(() => {
+    api.get('/ativos/alertas')
+      .then((r) => setVencidas((r.data as { status: string }[]).filter((p) => p.status === 'VENCIDO').length))
+      .catch(() => {})
+  }, [pathname])
 
   function handleLogout() {
     logout()
@@ -47,18 +58,24 @@ export default function AdminLayout() {
           <span className="text-sm font-semibold text-gray-800 leading-tight">Gestão Igreja</span>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-          {nav.map(({ to, label, icon: Icon }) => (
+          {nav.map(({ to, label, icon: Icon, cor, ativo }) => (
             <NavLink
               key={to}
               to={to}
               onClick={() => setMenuAberto(false)}
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300
-                ${isActive ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-600 hover:bg-gray-100'}`
+                ${isActive ? `${ativo} font-medium` : 'text-gray-600 hover:bg-gray-100'}`
               }
             >
-              <Icon size={17} aria-hidden />
-              {label}
+              <Icon size={17} className={cor} aria-hidden />
+              <span className="flex-1">{label}</span>
+              {to === '/manutencao' && vencidas > 0 && (
+                <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center" title={`${vencidas} manutenção(ões) vencida(s)`}>
+                  {vencidas}
+                  <span className="sr-only"> manutenções vencidas</span>
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

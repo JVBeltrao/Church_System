@@ -72,6 +72,9 @@ jobs:
       - name: Criar as tabelas (migrações)
         run: npx prisma migrate deploy && npx prisma generate
         working-directory: backend
+      - name: Migrações batem com o schema.prisma
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+        working-directory: backend
       - name: Backend — testes de integração (com cobertura)
         run: npm run test:integracao -- --coverage
         working-directory: backend
