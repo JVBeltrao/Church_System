@@ -12,6 +12,8 @@ export default defineConfig({
       {
         test: {
           name: 'unidade',
+          // Fuso de João Pessoa, como no uso real (pega erros de "data um dia antes")
+          env: { TZ: 'America/Fortaleza' },
           include: ['tests/unit/**/*.test.ts'],
           setupFiles: ['tests/helpers/ambiente.ts'],
           environment: 'node',
@@ -20,6 +22,7 @@ export default defineConfig({
       {
         test: {
           name: 'api',
+          env: { TZ: 'America/Fortaleza' },
           include: ['tests/api/**/*.test.ts'],
           setupFiles: ['tests/helpers/ambiente.ts', 'tests/helpers/mockPrisma.ts'],
           environment: 'node',

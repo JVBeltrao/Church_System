@@ -2,28 +2,33 @@ export type StatusManutencao = 'EM_DIA' | 'PROXIMO' | 'VENCIDO' | 'SEM_REGISTRO'
 
 const DIAS_AVISO = 30
 
+/**
+ * As datas de manutenção são do tipo DATE (só o dia do calendário) e chegam do banco como
+ * 00:00 UTC. Por isso a conta é feita em UTC: somar dias no fuso local (UTC-3) fazia a data
+ * "voltar" um dia — uma manutenção que vence hoje aparecia como vencida ontem.
+ */
 export function calcularProximaManutencao(
   ultimaData: Date,
   periodicidadeDias: number
 ): Date {
   const proxima = new Date(ultimaData)
-  proxima.setDate(proxima.getDate() + periodicidadeDias)
+  proxima.setUTCDate(proxima.getUTCDate() + periodicidadeDias)
   return proxima
 }
 
-export function calcularStatus(proximaManutencao: Date | null): StatusManutencao {
+/** Dias entre hoje (no fuso do servidor) e o dia do calendário da próxima manutenção */
+export function diasAte(proxima: Date, agora = new Date()): number {
+  const hoje = Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate())
+  const dia = Date.UTC(proxima.getUTCFullYear(), proxima.getUTCMonth(), proxima.getUTCDate())
+  return Math.round((dia - hoje) / 86_400_000)
+}
+
+export function calcularStatus(proximaManutencao: Date | null, agora = new Date()): StatusManutencao {
   if (!proximaManutencao) return 'SEM_REGISTRO'
 
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const proxima = new Date(proximaManutencao)
-  proxima.setHours(0, 0, 0, 0)
-
-  const diffMs = proxima.getTime() - hoje.getTime()
-  const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDias < 0) return 'VENCIDO'
-  if (diffDias <= DIAS_AVISO) return 'PROXIMO'
+  const dias = diasAte(proximaManutencao, agora)
+  if (dias < 0) return 'VENCIDO'
+  if (dias <= DIAS_AVISO) return 'PROXIMO'
   return 'EM_DIA'
 }
 

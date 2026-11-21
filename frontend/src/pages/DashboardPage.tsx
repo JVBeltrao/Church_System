@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import CalendarioMensal from '@/components/calendario/CalendarioMensal'
 import { aniversariosNoCalendario, eventosNoCalendario, legendaEventos } from '@/utils/calendario'
 import { SITUACAO, prazoPorExtenso } from '@/utils/situacaoManutencao'
+import { formatarData } from '@/utils/data'
 import dayjs from 'dayjs'
 import 'dayjs/locale/pt-br'
 dayjs.locale('pt-br')
@@ -21,15 +22,19 @@ function LinhaPendencia({ p }: { p: PendenciaManutencao }) {
   const s = SITUACAO[p.status]
   const Icone = ICONE_SITUACAO[p.status]
   return (
-    <li className={`flex items-center gap-3 rounded-lg border border-l-4 px-3 py-2 ${s.bloco} ${s.faixa}`}>
-      <Icone size={18} className="flex-shrink-0" aria-hidden />
+    <li className={`min-w-0 flex items-start gap-3 rounded-lg border border-l-4 px-3 py-2 ${s.bloco} ${s.faixa}`}>
+      <Icone size={18} className="flex-shrink-0 mt-0.5" aria-hidden />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate">{p.ativoNome} — {p.tipoNome}</p>
+        {/* No celular o nome quebra em mais linhas em vez de empurrar a tela para o lado */}
+        <p className="text-sm font-semibold break-words">
+          {p.ativoNome} — {p.tipoNome}
+        </p>
         <p className="text-xs opacity-90">
-          {p.status === 'SEM_REGISTRO' ? 'Nenhuma manutenção registrada ainda' : `${prazoPorExtenso(p.proximaManutencao)} (${dayjs(p.proximaManutencao).format('DD/MM/YYYY')})`}
+          {p.status === 'SEM_REGISTRO' ? 'Nenhuma manutenção registrada ainda' : `${prazoPorExtenso(p.proximaManutencao)} (${formatarData(p.proximaManutencao)})`}
         </p>
       </div>
-      <span className="text-xs font-bold uppercase tracking-wide whitespace-nowrap">{s.rotulo}</span>
+      <span className="hidden sm:inline text-xs font-bold uppercase tracking-wide whitespace-nowrap mt-0.5">{s.rotulo}</span>
+      <span className="sr-only sm:hidden">{s.rotulo}</span>
     </li>
   )
 }
@@ -126,7 +131,7 @@ export default function DashboardPage() {
               Ver manutenção <ArrowRight size={16} aria-hidden />
             </Link>
           </div>
-          <ul className="grid gap-2 md:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
             {[...urgentes, ...atencao].slice(0, 6).map((p) => <LinhaPendencia key={p.tipoId} p={p} />)}
           </ul>
           {itens.length > 6 && <p className="text-xs mt-2 text-gray-600">e mais {itens.length - 6}…</p>}

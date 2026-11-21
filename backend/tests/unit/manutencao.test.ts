@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { calcularProximaManutencao, calcularStatus, resumirAtivo, situacaoDoTipo } from '../../src/utils/manutencao'
+import { calcularProximaManutencao, calcularStatus, diasAte, resumirAtivo, situacaoDoTipo } from '../../src/utils/manutencao'
 
 describe('calcularProximaManutencao', () => {
   it('soma a periodicidade à data da última manutenção', () => {
@@ -68,5 +68,35 @@ describe('vários tipos de manutenção no mesmo ativo', () => {
     const r = resumirAtivo({ tipos: [ar.tipos[1], { id: 'novo', nome: 'Revisão', periodicidadeDias: 30, manutencoes: [] }] })
     expect(r.status).toBe('SEM_REGISTRO')
     expect(r.tipos[0].ultimaManutencao).toBeNull()
+  })
+})
+
+describe('regressão: datas do banco (DATE = 00:00 UTC) no fuso de Brasília', () => {
+  afterEach(() => vi.useRealTimers())
+  // Como o Prisma entrega uma coluna DATE: meia-noite em UTC
+  const doBanco = (iso: string) => new Date(`${iso}T00:00:00.000Z`)
+
+  it('última em 22/10 + 30 dias = 21/11 (e não 20/11)', () => {
+    expect(calcularProximaManutencao(doBanco('2026-10-22'), 30).toISOString().slice(0, 10)).toBe('2026-11-21')
+  })
+
+  it('no próprio dia do vencimento, à tarde, ainda é "vence hoje" (PROXIMO), não VENCIDO', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-21T19:24:00.000Z')) // 21/11 16:24 em Brasília
+    const proxima = calcularProximaManutencao(doBanco('2026-10-22'), 30)
+    expect(calcularStatus(proxima)).toBe('PROXIMO')
+    expect(diasAte(proxima)).toBe(0)
+  })
+
+  it('no dia seguinte ao vencimento → VENCIDO', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-22T11:00:00.000Z')) // 22/11 08:00 em Brasília
+    expect(calcularStatus(calcularProximaManutencao(doBanco('2026-10-22'), 30))).toBe('VENCIDO')
+  })
+
+  it('à noite (depois das 21h, quando em UTC já é o dia seguinte) continua sendo o mesmo dia', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-22T01:30:00.000Z')) // 21/11 22:30 em Brasília
+    expect(calcularStatus(calcularProximaManutencao(doBanco('2026-10-22'), 30))).toBe('PROXIMO')
   })
 })

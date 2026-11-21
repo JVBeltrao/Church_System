@@ -15,7 +15,7 @@ interface Props<C extends string> {
 export default function OrdenacaoSelect<C extends string>({ value, onChange, opcoes, rotulo = 'Ordenar', className = '' }: Props<C>) {
   const id = useId()
   return (
-    <div className={`inline-flex items-center gap-1.5 ${className}`}>
+    <div className={`inline-flex max-w-full min-w-0 items-center gap-1.5 ${className}`}>
       <label htmlFor={id} className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 whitespace-nowrap">
         <ArrowUpDown size={13} aria-hidden /> {rotulo}
       </label>
@@ -23,7 +23,7 @@ export default function OrdenacaoSelect<C extends string>({ value, onChange, opc
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value as C)}
-        className="h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 outline-none focus:border-primary-500 focus-visible:ring-2 focus-visible:ring-primary-200"
+        className="h-9 min-w-0 max-w-full flex-1 rounded-lg border border-gray-300 bg-white px-2.5 text-sm text-gray-700 outline-none focus:border-primary-500 focus-visible:ring-2 focus-visible:ring-primary-200"
       >
         {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.label}</option>)}
       </select>
