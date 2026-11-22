@@ -271,9 +271,10 @@ async function main() {
       nome: 'Ar-condicionado — salão principal',
       descricao: 'Dois aparelhos split de 60.000 BTU',
       tipos: [
-        { nome: 'Limpeza', periodicidadeDias: 90, historico: [[75, 'Limpeza das serpentinas e bandejas', 'Refrigeração Santos'], [170, 'Limpeza geral', 'Refrigeração Santos']] },
-        { nome: 'Troca do filtro', periodicidadeDias: 180, historico: [[215, 'Troca dos filtros', 'Refrigeração Santos']] },
-        { nome: 'Recarga de gás', periodicidadeDias: 365, historico: [[395, 'Recarga de gás R-410A', 'Refrigeração Santos']] },
+        // Limpeza vencida (tarefa A6 do roteiro registra a limpeza); filtro perto de vencer; gás em dia
+        { nome: 'Limpeza', periodicidadeDias: 90, historico: [[100, 'Limpeza das serpentinas e bandejas', 'Refrigeração Santos'], [190, 'Limpeza geral', 'Refrigeração Santos']] },
+        { nome: 'Troca do filtro', periodicidadeDias: 180, historico: [[165, 'Troca dos filtros', 'Refrigeração Santos']] },
+        { nome: 'Recarga de gás', periodicidadeDias: 365, historico: [[200, 'Recarga de gás R-410A', 'Refrigeração Santos']] },
       ],
     },
     {
@@ -286,7 +287,7 @@ async function main() {
       descricao: '6 extintores tipo ABC',
       tipos: [
         { nome: 'Recarga e vistoria', periodicidadeDias: 365, historico: [[200, 'Recarga e vistoria anual', 'Extintores JP'], [565, 'Recarga e vistoria anual', 'Extintores JP']] },
-        { nome: 'Teste hidrostático', periodicidadeDias: 1825, historico: [] },
+        { nome: 'Teste hidrostático', periodicidadeDias: 1825, historico: [[700, 'Teste hidrostático dos cilindros', 'Extintores JP']] },
       ],
     },
     {
@@ -299,7 +300,7 @@ async function main() {
       descricao: 'Gerador de emergência',
       tipos: [
         { nome: 'Troca de óleo', periodicidadeDias: 120, historico: [[30, 'Troca de óleo', 'Mecânica Silva']] },
-        { nome: 'Teste de carga', periodicidadeDias: 30, historico: [[30, 'Teste de carga', 'Mecânica Silva']] },
+        { nome: 'Teste de carga', periodicidadeDias: 90, historico: [[20, 'Teste de carga', 'Mecânica Silva']] },
       ],
     },
     { nome: 'Instalação elétrica', descricao: 'Quadro e fiação', tipos: [{ nome: 'Revisão geral', periodicidadeDias: 365, historico: [] }] },
@@ -321,7 +322,7 @@ async function main() {
     )
     if (historico.length > 0) await prisma.manutencao.createMany({ data: historico })
   }
-  console.log('✅ Ativos com vários tipos de manutenção: vencidos, próximos, em dia e sem registro')
+  console.log('✅ Ativos com vários tipos de manutenção: ar-condicionado vencido (limpeza), bomba próxima, extintores/caixa/gerador em dia, elétrica sem registro')
 
   // ── Campanha: itens concluído, em andamento, só com pendentes e não iniciado
   const pix = 'igreja.adju@gmail.com'
